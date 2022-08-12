@@ -23,6 +23,8 @@ __all__ = ['single', 'complete', 'average', 'weighted', 'ward', 'centroid', 'med
 __version_info__ = ('1', '2', '6')
 __version__ = '.'.join(__version_info__)
 
+import numbers
+
 from numpy import double, empty, array, ndarray, var, cov, dot, expand_dims, \
     ceil, sqrt
 from numpy.linalg import inv
@@ -34,7 +36,7 @@ except ImportError:
                           'vector data since the function '
                           'scipy.spatial.distance.pdist could not be  '
                           'imported.')
-from _fastcluster import linkage_wrap, linkage_vector_wrap
+from _fastcluster import linkage_wrap, linkage_vector_wrap, cut_tree_wrap
 
 def single(D):
     '''Single linkage clustering (alias). See the help on the “linkage”
@@ -492,3 +494,39 @@ metric='sokalmichener' is an alias for 'matching'.'''
     if N > 1:
         linkage_vector_wrap(X, Z, mthidx[method], mtridx[metric], extraarg)
     return Z
+
+
+def cut_tree(Z, n_clusters=None, height=None):
+    # TODO docstring
+    # n_clusters : number of wanted clusters
+
+    # Only basic arguments verifications are done in Python
+    if (type(Z) != ndarray) or (Z.dtype != double) or (Z.ndim != 2):
+        raise TypeError("Linkage matrix should be 2d numpy array of doubles")
+
+    if (height is not None) and (n_clusters is not None):
+        raise ValueError("Cut tree should take either height xor n_clusters arguments, not both")
+
+    if (height is None) and (n_clusters is None):
+        raise ValueError("Cut tree should take either height xor n_clusters arguments to find cut point")
+
+    if height is not None:
+        # Tree cut point defined by its height
+        if not isinstance(height, numbers.Real):
+            raise TypeError("height argument should be a real number")
+        height = float(height)
+        n_clusters = -1
+    else:
+        # Tree cut point defined by the number of clusters
+        if not isinstance(n_clusters, numbers.Integral):
+            raise TypeError("height argument should be an int number")
+        n_clusters = int(n_clusters)
+        if n_clusters < 1:
+            raise ValueError("n_clusters cannot be negative number")
+        height = float('nan')
+
+    cut_tree = empty(Z.shape[0]+1 , dtype=int)
+
+    cut_tree_wrap(Z, n_clusters, height, cut_tree)
+
+    return cut_tree

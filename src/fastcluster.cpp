@@ -70,6 +70,9 @@
 #include <algorithm> // for std::fill_n
 #include <stdexcept> // for std::runtime_error
 #include <string> // for std::string
+#include <vector> // for std::vector
+#include <array> // for std::array
+#include <numeric> // for std::iota
 
 #include <cfloat> // also for DBL_MAX, DBL_MIN
 #ifndef DBL_MANT_DIG
@@ -1798,6 +1801,59 @@ static void generic_linkage_vector_alternative(const t_index N,
     }
   }
 }
+
+/*
+  Cut tree methods
+*/
+
+void cutree_k(int observations_number, const std::vector<std::array<int64_t,3>> & Z_int, int nclust, int64_t * cut_tree_){
+  /*
+   * Assigns cluster labels (0, ..., nclust-1) to the n points such
+   * that the cluster result is split into nclust clusters
+   * Does not verify the tree, neither allocate any memory. Just performs the operation
+   * Args:
+   *    - observations_number (strictly positive integer)
+   *    - Z_int : dendrogramm
+   *    - nclust (strictly positive integer)
+   * Output:
+   *    - labels : allocated integer array of size observations_number (for result)
+   */
+  std::vector<int64_t> working_tree(2*observations_number,0);
+  std::iota (std::begin(working_tree), std::end(working_tree), 0);
+
+  for(int i = 0; i < (observations_number-nclust); i++) {
+    int receiving_cluster, disappearing_cluster;
+    // Gets which clusters will be merged
+    if (working_tree[Z_int[i][0]] < working_tree[Z_int[i][1]]) {
+      receiving_cluster = working_tree[Z_int[i][0]];
+      disappearing_cluster = working_tree[Z_int[i][1]];
+    } else {
+      receiving_cluster = working_tree[Z_int[i][1]];
+      disappearing_cluster = working_tree[Z_int[i][0]];
+    }
+
+    // Merge the disappearing cluster into the receiving cluster, and updates indexes for the right part of the tree
+    for (int j = 0; j < (observations_number+i); j++) {
+      if (working_tree[j] == disappearing_cluster) {
+        working_tree[j] = receiving_cluster;
+      }
+      if (working_tree[j] > disappearing_cluster) {
+        working_tree[j] -= 1;
+      }
+    }
+
+    // Save the new index reference
+    working_tree[observations_number+i] = working_tree[Z_int[i][1]];
+  }
+
+  // Copy result into the already allocated array
+  for(int i = 0; i < observations_number; i++) {
+    cut_tree_[i] = working_tree[i];
+  }
+
+  return;
+}
+
 
 #if HAVE_VISIBILITY
 #pragma GCC visibility pop

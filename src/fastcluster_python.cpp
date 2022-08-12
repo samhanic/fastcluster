@@ -148,11 +148,13 @@ static void generate_SciPy_dendrogram(t_float * const Z, cluster_result & Z2, co
 */
 static PyObject * linkage_wrap(PyObject * const self, PyObject * const args);
 static PyObject * linkage_vector_wrap(PyObject * const self, PyObject * const args);
+static PyObject * cut_tree_wrap(PyObject * const self, PyObject * const args);
 
 // List the C++ methods that this extension provides.
 static PyMethodDef _fastclusterWrapMethods[] = {
   {"linkage_wrap", linkage_wrap, METH_VARARGS, NULL},
   {"linkage_vector_wrap", linkage_vector_wrap, METH_VARARGS, NULL},
+  {"cut_tree_wrap", cut_tree_wrap, METH_VARARGS, NULL},
   {NULL, NULL, 0, NULL}    /* Sentinel - marks the end of this structure */
 };
 
@@ -1216,6 +1218,97 @@ static PyObject *linkage_vector_wrap(PyObject * const, PyObject * const args) {
       generate_SciPy_dendrogram<false>(Z_, Z2, N);
     }
   } // try
+  catch (const std::bad_alloc&) {
+    return PyErr_NoMemory();
+  }
+  catch(const std::exception& e){
+    PyErr_SetString(PyExc_EnvironmentError, e.what());
+    return NULL;
+  }
+  catch(const nan_error&){
+    PyErr_SetString(PyExc_FloatingPointError, "NaN dissimilarity value.");
+    return NULL;
+  }
+  catch(const pythonerror){
+    return NULL;
+  }
+  catch(...){
+    PyErr_SetString(PyExc_EnvironmentError,
+                    "C++ exception (unknown reason). Please send a bug report.");
+    return NULL;
+  }
+#if HAVE_DIAGNOSTIC
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wold-style-cast"
+#endif
+  Py_RETURN_NONE;
+#if HAVE_DIAGNOSTIC
+#pragma GCC diagnostic pop
+#endif
+}
+
+
+/*
+  Cut tree interface for Python
+ */
+
+static PyObject * cut_tree_wrap(PyObject * const self, PyObject * const args) {
+  PyArrayObject * Z;
+  PyArrayObject * cut_tree;
+  long int n_clusters;
+  double height;
+
+  try {
+    // Parse the input arguments and cast them
+#if HAVE_DIAGNOSTIC
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wold-style-cast"
+#endif
+    if (!PyArg_ParseTuple(args, "O!ldO!",
+                          &PyArray_Type, &Z,        // NumPy array of double
+                          &n_clusters,              // signed long int (python int)
+                          &height,                  // double
+                          &PyArray_Type, &cut_tree  // NumPy array of int64 for the result, already allocated
+                          )) {
+      return NULL;
+    }
+#if HAVE_DIAGNOSTIC
+#pragma GCC diagnostic pop
+#endif
+
+    int64_t observations_number = PyArray_DIMS(cut_tree)[0];
+    t_float * const Z_ = reinterpret_cast<t_float *>(PyArray_DATA(Z));
+    int64_t * const cut_tree_ = reinterpret_cast<int64_t *>(PyArray_DATA(cut_tree)); // To write out results
+
+    // Check that Z argument is a valid linkage
+    // TODO further checks on the arguments
+    if (PyArray_DIMS(Z)[1] != 4) {
+      PyErr_SetString(PyExc_ValueError, "The linkage matrix must have 4 columns");
+      return NULL;
+    }
+
+    // 3 of the 4 columns of the linkage matrix are integers.
+    // As we will need to cast them anyway, we extract them right away into specific vector
+    // Z_int, 1st column : Points A to merge
+    // Z_int, 2nd column : Points B to merge
+    // Z_int, 3nd column : Number of points in the resulting cluster
+    std::vector<std::array<int64_t,3>> Z_int;
+    std::vector<t_float> Z_dist;
+    for (int i = 0; i < observations_number-1; i++) {
+      std::array<int64_t,3> link{{static_cast<int64_t>(Z_[4*i]), static_cast<int64_t>(Z_[4*i+1]), static_cast<int64_t>(Z_[4*i+3])}};
+      Z_int.push_back(link);
+      Z_dist.push_back(Z_[4*i+2]);
+    }
+
+    if (n_clusters == -1) {
+      // Tree cut point defined by its height
+      // TODO
+    } else {
+      // Tree cut point defined by the number of clusters
+      cutree_k(observations_number, Z_int, n_clusters, cut_tree_);
+    }
+
+  }
   catch (const std::bad_alloc&) {
     return PyErr_NoMemory();
   }
