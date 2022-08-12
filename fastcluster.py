@@ -496,9 +496,18 @@ metric='sokalmichener' is an alias for 'matching'.'''
     return Z
 
 
-def cut_tree(Z, n_clusters=None, height=None):
-    # TODO docstring
-    # n_clusters : number of wanted clusters
+def cut_tree(Z: array, n_clusters:numbers.Integral=None, height:numbers.Real=None) -> array:
+    """
+    Given a linkage matrix Z, and either n_clusters xor height, return the cut tree.
+
+    Args:
+        Z (array): linkage matrix
+        n_clusters (int): Number of clusters in the tree at the cut point
+        height (float): The height at which to cut the tree
+
+    Returns:
+        cutree : array indicating group membership at each agglomeration step
+    """
 
     # Only basic arguments verifications are done in Python
     if (type(Z) != ndarray) or (Z.dtype != double) or (Z.ndim != 2):
