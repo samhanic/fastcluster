@@ -19,7 +19,7 @@ is located in the directory inst/doc/ in the source distribution and may
 also be obtained at <http://danifold.net/fastcluster.html>.
 """
 
-__all__ = ['single', 'complete', 'average', 'weighted', 'ward', 'centroid', 'median', 'linkage', 'linkage_vector']
+__all__ = ['single', 'complete', 'average', 'weighted', 'ward', 'centroid', 'median', 'linkage', 'linkage_vector', 'cut_tree']
 __version_info__ = ('1', '2', '6')
 __version__ = '.'.join(__version_info__)
 
