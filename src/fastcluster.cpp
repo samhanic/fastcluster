@@ -67,7 +67,7 @@
 #include <cmath> // for std::pow, std::sqrt
 #include <cstddef> // for std::ptrdiff_t
 #include <limits> // for std::numeric_limits<...>::infinity()
-#include <algorithm> // for std::fill_n
+#include <algorithm> // for std::fill_n , std::upper_bound
 #include <stdexcept> // for std::runtime_error
 #include <string> // for std::string
 #include <vector> // for std::vector
@@ -1806,7 +1806,7 @@ static void generic_linkage_vector_alternative(const t_index N,
   Cut tree methods
 */
 
-void cutree_k(int observations_number, const std::vector<std::array<int64_t,3>> & Z_int, int nclust, int64_t * cut_tree_){
+void cutree_k(int observations_number, const std::vector<std::array<int64_t,2>> & Z_int, int nclust, int64_t * cut_tree_) {
   /*
    * Assigns cluster labels (0, ..., nclust-1) to the n points such
    * that the cluster result is split into nclust clusters
@@ -1816,7 +1816,7 @@ void cutree_k(int observations_number, const std::vector<std::array<int64_t,3>> 
    *    - Z_int : dendrogramm
    *    - nclust (strictly positive integer)
    * Output:
-   *    - labels : allocated integer array of size observations_number (for result)
+   *    - cut_tree_ : allocated integer array of size observations_number (for result)
    */
   std::vector<int64_t> working_tree(2*observations_number,0);
   std::iota (std::begin(working_tree), std::end(working_tree), 0);
@@ -1850,6 +1850,27 @@ void cutree_k(int observations_number, const std::vector<std::array<int64_t,3>> 
   for(int i = 0; i < observations_number; i++) {
     cut_tree_[i] = working_tree[i];
   }
+
+  return;
+}
+
+
+void cutree_cdist(int observations_number, const std::vector<std::array<int64_t,2>> & Z_int, const std::vector<double> & Z_dist, double height, int64_t * cut_tree_) {
+  /*
+   * Assigns cluster labels (0, ..., nclust-1) to the n points such
+   * that the cluster result is split into nclust clusters
+   * Does not verify the tree, neither allocate any memory. Just performs the operation
+   * Args:
+   *    - observations_number (strictly positive integer)
+   *    - Z_int : dendrogramm (first two columns)
+   *    - Z_dist : dendrogramm (third column, i.e. distances vector, increasing)
+   *    - height : height of tree cut
+   * Output:
+   *    - cut_tree_ : allocated integer array of size observations_number (for result)
+   */
+  int nclust = observations_number - (std::upper_bound(Z_dist.begin(), Z_dist.end(), height) - Z_dist.begin());
+
+  cutree_k(observations_number, Z_int, nclust, cut_tree_);
 
   return;
 }

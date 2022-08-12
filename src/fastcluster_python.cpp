@@ -148,13 +148,15 @@ static void generate_SciPy_dendrogram(t_float * const Z, cluster_result & Z2, co
 */
 static PyObject * linkage_wrap(PyObject * const self, PyObject * const args);
 static PyObject * linkage_vector_wrap(PyObject * const self, PyObject * const args);
-static PyObject * cut_tree_wrap(PyObject * const self, PyObject * const args);
+static PyObject * cut_tree_k_wrap(PyObject * const self, PyObject * const args);
+static PyObject * cut_tree_cdist_wrap(PyObject * const self, PyObject * const args);
 
 // List the C++ methods that this extension provides.
 static PyMethodDef _fastclusterWrapMethods[] = {
   {"linkage_wrap", linkage_wrap, METH_VARARGS, NULL},
   {"linkage_vector_wrap", linkage_vector_wrap, METH_VARARGS, NULL},
-  {"cut_tree_wrap", cut_tree_wrap, METH_VARARGS, NULL},
+  {"cut_tree_k_wrap", cut_tree_k_wrap, METH_VARARGS, NULL},
+  {"cut_tree_cdist_wrap", cut_tree_cdist_wrap, METH_VARARGS, NULL},
   {NULL, NULL, 0, NULL}    /* Sentinel - marks the end of this structure */
 };
 
@@ -1252,11 +1254,12 @@ static PyObject *linkage_vector_wrap(PyObject * const, PyObject * const args) {
   Cut tree interface for Python
  */
 
-static PyObject * cut_tree_wrap(PyObject * const self, PyObject * const args) {
+
+// Tree cut point defined by the number of clusters
+static PyObject * cut_tree_k_wrap(PyObject * const self, PyObject * const args) {
   PyArrayObject * Z;
-  PyArrayObject * cut_tree;
   long int n_clusters;
-  double height;
+  PyArrayObject * cut_tree;
 
   try {
     // Parse the input arguments and cast them
@@ -1264,9 +1267,85 @@ static PyObject * cut_tree_wrap(PyObject * const self, PyObject * const args) {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wold-style-cast"
 #endif
-    if (!PyArg_ParseTuple(args, "O!ldO!",
+    if (!PyArg_ParseTuple(args, "O!lO!",
                           &PyArray_Type, &Z,        // NumPy array of double
                           &n_clusters,              // signed long int (python int)
+                          &PyArray_Type, &cut_tree  // NumPy array of int64 for the result, already allocated
+                          )) {
+      return NULL;
+    }
+#if HAVE_DIAGNOSTIC
+#pragma GCC diagnostic pop
+#endif
+
+    int64_t observations_number = PyArray_DIMS(cut_tree)[0];
+    t_float * const Z_ = reinterpret_cast<t_float *>(PyArray_DATA(Z));
+    int64_t * const cut_tree_ = reinterpret_cast<int64_t *>(PyArray_DATA(cut_tree)); // To write out results
+
+    // Check that Z argument is a valid linkage
+    // TODO further checks on the arguments
+    if (PyArray_DIMS(Z)[1] != 4) {
+      PyErr_SetString(PyExc_ValueError, "The linkage matrix must have 4 columns");
+      return NULL;
+    }
+
+    // The needed columns of the linkage are integers coded as float
+    // As we will need to cast them anyway, we extract them right away into specific vector
+    // Z_int, 1st column : Points A to merge
+    // Z_int, 2nd column : Points B to merge
+    std::vector<std::array<int64_t,2>> Z_int;
+    for (int i = 0; i < observations_number-1; i++) {
+      std::array<int64_t,2> link{{static_cast<int64_t>(Z_[4*i]), static_cast<int64_t>(Z_[4*i+1])}};
+      Z_int.push_back(link);
+    }
+
+    cutree_k(observations_number, Z_int, n_clusters, cut_tree_);
+
+  }
+  catch (const std::bad_alloc&) {
+    return PyErr_NoMemory();
+  }
+  catch(const std::exception& e){
+    PyErr_SetString(PyExc_EnvironmentError, e.what());
+    return NULL;
+  }
+  catch(const nan_error&){
+    PyErr_SetString(PyExc_FloatingPointError, "NaN dissimilarity value.");
+    return NULL;
+  }
+  catch(const pythonerror){
+    return NULL;
+  }
+  catch(...){
+    PyErr_SetString(PyExc_EnvironmentError,
+                    "C++ exception (unknown reason). Please send a bug report.");
+    return NULL;
+  }
+#if HAVE_DIAGNOSTIC
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wold-style-cast"
+#endif
+  Py_RETURN_NONE;
+#if HAVE_DIAGNOSTIC
+#pragma GCC diagnostic pop
+#endif
+}
+
+
+// Tree cut point defined by its height
+static PyObject * cut_tree_cdist_wrap(PyObject * const self, PyObject * const args) {
+  PyArrayObject * Z;
+  double height;
+  PyArrayObject * cut_tree;
+
+  try {
+    // Parse the input arguments and cast them
+#if HAVE_DIAGNOSTIC
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wold-style-cast"
+#endif
+    if (!PyArg_ParseTuple(args, "O!dO!",
+                          &PyArray_Type, &Z,        // NumPy array of double
                           &height,                  // double
                           &PyArray_Type, &cut_tree  // NumPy array of int64 for the result, already allocated
                           )) {
@@ -1287,26 +1366,21 @@ static PyObject * cut_tree_wrap(PyObject * const self, PyObject * const args) {
       return NULL;
     }
 
-    // 3 of the 4 columns of the linkage matrix are integers.
+    // Two of the three needed columns of the linkage are integers coded as float
     // As we will need to cast them anyway, we extract them right away into specific vector
+    // We also copy distances into proper vector Z_dist
     // Z_int, 1st column : Points A to merge
     // Z_int, 2nd column : Points B to merge
-    // Z_int, 3nd column : Number of points in the resulting cluster
-    std::vector<std::array<int64_t,3>> Z_int;
+    // Z_dist : nodes heights
+    std::vector<std::array<int64_t,2>> Z_int;
     std::vector<t_float> Z_dist;
     for (int i = 0; i < observations_number-1; i++) {
-      std::array<int64_t,3> link{{static_cast<int64_t>(Z_[4*i]), static_cast<int64_t>(Z_[4*i+1]), static_cast<int64_t>(Z_[4*i+3])}};
+      std::array<int64_t,2> link{{static_cast<int64_t>(Z_[4*i]), static_cast<int64_t>(Z_[4*i+1])}};
       Z_int.push_back(link);
       Z_dist.push_back(Z_[4*i+2]);
     }
 
-    if (n_clusters == -1) {
-      // Tree cut point defined by its height
-      // TODO
-    } else {
-      // Tree cut point defined by the number of clusters
-      cutree_k(observations_number, Z_int, n_clusters, cut_tree_);
-    }
+    cutree_cdist(observations_number, Z_int, Z_dist, height, cut_tree_);
 
   }
   catch (const std::bad_alloc&) {

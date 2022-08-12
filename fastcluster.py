@@ -36,7 +36,7 @@ except ImportError:
                           'vector data since the function '
                           'scipy.spatial.distance.pdist could not be  '
                           'imported.')
-from _fastcluster import linkage_wrap, linkage_vector_wrap, cut_tree_wrap
+from _fastcluster import linkage_wrap, linkage_vector_wrap, cut_tree_k_wrap, cut_tree_cdist_wrap
 
 def single(D):
     '''Single linkage clustering (alias). See the help on the “linkage”
@@ -510,12 +510,14 @@ def cut_tree(Z, n_clusters=None, height=None):
     if (height is None) and (n_clusters is None):
         raise ValueError("Cut tree should take either height xor n_clusters arguments to find cut point")
 
+    cut_tree = empty(Z.shape[0]+1 , dtype=int)
+
     if height is not None:
         # Tree cut point defined by its height
         if not isinstance(height, numbers.Real):
             raise TypeError("height argument should be a real number")
-        height = float(height)
-        n_clusters = -1
+        cut_tree_cdist_wrap(Z, float(height), cut_tree)
+
     else:
         # Tree cut point defined by the number of clusters
         if not isinstance(n_clusters, numbers.Integral):
@@ -523,10 +525,6 @@ def cut_tree(Z, n_clusters=None, height=None):
         n_clusters = int(n_clusters)
         if n_clusters < 1:
             raise ValueError("n_clusters cannot be negative number")
-        height = float('nan')
-
-    cut_tree = empty(Z.shape[0]+1 , dtype=int)
-
-    cut_tree_wrap(Z, n_clusters, height, cut_tree)
+        cut_tree_k_wrap(Z, n_clusters, cut_tree)
 
     return cut_tree
