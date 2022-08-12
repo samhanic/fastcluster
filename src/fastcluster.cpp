@@ -1810,7 +1810,7 @@ void cutree_k(int observations_number, const std::vector<std::array<int64_t,2>> 
   /*
    * Assigns cluster labels (0, ..., nclust-1) to the n points such
    * that the cluster result is split into nclust clusters
-   * Does not verify the tree, neither allocate any memory. Just performs the operation
+   * Does not verify the tree, neither allocate memory for output. Just performs the operation
    * Args:
    *    - observations_number (strictly positive integer)
    *    - Z_int : dendrogramm
@@ -1859,7 +1859,7 @@ void cutree_cdist(int observations_number, const std::vector<std::array<int64_t,
   /*
    * Assigns cluster labels (0, ..., nclust-1) to the n points such
    * that the cluster result is split into nclust clusters
-   * Does not verify the tree, neither allocate any memory. Just performs the operation
+   * Does not verify the tree, neither allocate memory for output. Just performs the operation
    * Args:
    *    - observations_number (strictly positive integer)
    *    - Z_int : dendrogramm (first two columns)

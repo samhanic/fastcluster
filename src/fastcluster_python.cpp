@@ -52,12 +52,13 @@
 
 // There is Py_IS_NAN but it is so much slower on my x86_64 system with GCC!
 
-#include <cmath> // for std::abs, std::pow, std::sqrt
+#include <cmath> // for std::abs, std::pow, std::sqrt, std::trunc
 #include <cstddef> // for std::ptrdiff_t
 #include <limits> // for std::numeric_limits<...>::infinity()
 #include <algorithm> // for std::stable_sort
 #include <new> // for std::bad_alloc
 #include <exception> // for std::exception
+#include <set> // for std::set
 
 #include "fastcluster.cpp"
 
@@ -1255,6 +1256,81 @@ static PyObject *linkage_vector_wrap(PyObject * const, PyObject * const args) {
  */
 
 
+// Verify if a matrix Z is considered as valid linkage
+inline void is_valid_linkage(PyArrayObject * const Z, int64_t observations_number) {
+
+  // ----- Verifications of the dimensions
+  if (PyArray_DIMS(Z)[1] != 4) {
+    PyErr_SetString(PyExc_ValueError, "The linkage matrix must have 4 columns");
+    return;
+  }
+
+  int64_t linkage_dimension = static_cast<int64_t>(PyArray_DIMS(Z)[0]);
+
+  if (linkage_dimension < 1) {
+    PyErr_SetString(PyExc_ValueError, "Linkage dimension should be strictly positive integer");
+    return;
+  }
+
+  if ((linkage_dimension + 1) != observations_number) {
+    std::string err_msg = "Incorrect observations_number values : ";
+    err_msg += std::to_string(observations_number);
+    err_msg += " while linkage is ";
+    err_msg += std::to_string(linkage_dimension);
+    err_msg += " operations long";
+
+    PyErr_SetString(PyExc_ValueError, err_msg.c_str());
+    return;
+  }
+
+  // ----- Verifications on the data
+  t_float * const Z_ = reinterpret_cast<t_float *>(PyArray_DATA(Z));
+
+  for (int i = 0; i < linkage_dimension; i++) {
+    if ((std::trunc(Z_[4*i]) != Z_[4*i]) || (std::trunc(Z_[4*i+1]) != Z_[4*i+1]) || (std::trunc(Z_[4*i+3]) != Z_[4*i+3])) {
+      PyErr_SetString(PyExc_ValueError, "Linkage 0th, 1th and 3rd columns should contain integers");
+      return;
+    }
+  }
+
+  for (int i = 0; i < linkage_dimension; i++) {
+    if ((Z_[4*i] < 0) || (Z_[4*i+1] < 0) || (Z_[4*i+2] < 0) || (Z_[4*i+3] < 0)) {
+      PyErr_SetString(PyExc_ValueError, "Linkage should not contain negative indices, distances or counts");
+      return;
+    }
+  }
+
+  // checks if linkage distances are ordered
+  for (int i = 0; i < linkage_dimension-1; i++) {
+    if (Z_[4*i+2] >= Z_[4*(i+1)+2]) {
+      PyErr_SetString(PyExc_ValueError, "Linkage distances should be sorted by ascending order");
+      return;
+    }
+  }
+
+  // checks if hierarchy uses cluster before formed
+  for (int i = 0; i < linkage_dimension; i++) {
+    if ((Z_[4*i] >= observations_number + i) || (Z_[4*i+1] >= observations_number + i)) {
+      PyErr_SetString(PyExc_ValueError, "Linkage uses non-singleton cluster before it is formed");
+      return;
+    }
+  }
+
+  // checks if hierarchy uses cluster more than once
+  std::set<int64_t> chosen;
+  for (int i = 0; i < linkage_dimension; i++) {
+    if ((chosen.find(Z_[4*i]) != chosen.end()) || (chosen.find(Z_[4*i+1]) != chosen.end()) || (Z_[4*i] == Z_[4*i+1])) {
+      PyErr_SetString(PyExc_ValueError, "Linkage uses the same cluster more than once");
+      return;
+    }
+    chosen.insert(Z_[4*i]);
+    chosen.insert(Z_[4*i+1]);
+  }
+
+  return;
+}
+
+
 // Tree cut point defined by the number of clusters
 static PyObject * cut_tree_k_wrap(PyObject * const self, PyObject * const args) {
   PyArrayObject * Z;
@@ -1283,11 +1359,7 @@ static PyObject * cut_tree_k_wrap(PyObject * const self, PyObject * const args) 
     int64_t * const cut_tree_ = reinterpret_cast<int64_t *>(PyArray_DATA(cut_tree)); // To write out results
 
     // Check that Z argument is a valid linkage
-    // TODO further checks on the arguments
-    if (PyArray_DIMS(Z)[1] != 4) {
-      PyErr_SetString(PyExc_ValueError, "The linkage matrix must have 4 columns");
-      return NULL;
-    }
+    is_valid_linkage(Z, observations_number);
 
     // The needed columns of the linkage are integers coded as float
     // As we will need to cast them anyway, we extract them right away into specific vector
@@ -1360,11 +1432,7 @@ static PyObject * cut_tree_cdist_wrap(PyObject * const self, PyObject * const ar
     int64_t * const cut_tree_ = reinterpret_cast<int64_t *>(PyArray_DATA(cut_tree)); // To write out results
 
     // Check that Z argument is a valid linkage
-    // TODO further checks on the arguments
-    if (PyArray_DIMS(Z)[1] != 4) {
-      PyErr_SetString(PyExc_ValueError, "The linkage matrix must have 4 columns");
-      return NULL;
-    }
+    is_valid_linkage(Z, observations_number);
 
     // Two of the three needed columns of the linkage are integers coded as float
     // As we will need to cast them anyway, we extract them right away into specific vector
