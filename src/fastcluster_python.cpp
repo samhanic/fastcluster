@@ -1356,7 +1356,7 @@ static PyObject * cut_tree_k_wrap(PyObject * const self, PyObject * const args) 
 
     int64_t observations_number = PyArray_DIMS(cut_tree)[0];
     t_float * const Z_ = reinterpret_cast<t_float *>(PyArray_DATA(Z));
-    int64_t * const cut_tree_ = reinterpret_cast<int64_t *>(PyArray_DATA(cut_tree)); // To write out results
+    int64_t * cut_tree_ = reinterpret_cast<int64_t *>(PyArray_DATA(cut_tree)); // To write out results
 
     // Check that Z argument is a valid linkage
     is_valid_linkage(Z, observations_number);
@@ -1429,7 +1429,7 @@ static PyObject * cut_tree_cdist_wrap(PyObject * const self, PyObject * const ar
 
     int64_t observations_number = PyArray_DIMS(cut_tree)[0];
     t_float * const Z_ = reinterpret_cast<t_float *>(PyArray_DATA(Z));
-    int64_t * const cut_tree_ = reinterpret_cast<int64_t *>(PyArray_DATA(cut_tree)); // To write out results
+    int64_t * cut_tree_ = reinterpret_cast<int64_t *>(PyArray_DATA(cut_tree)); // To write out results
 
     // Check that Z argument is a valid linkage
     is_valid_linkage(Z, observations_number);

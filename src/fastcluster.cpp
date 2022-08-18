@@ -1838,7 +1838,7 @@ void cutree_k(int observations_number, const std::vector<std::array<int64_t,2>> 
         working_tree[j] = receiving_cluster;
       }
       if (working_tree[j] > disappearing_cluster) {
-        working_tree[j] -= 1;
+        working_tree[j]--;
       }
     }
 
